@@ -1,0 +1,34 @@
+TensorFlow 2.0 Upgrade Script
+-----------------------------
+Converted 1 files
+Detected 0 issues that require attention
+--------------------------------------------------------------------------------
+================================================================================
+Detailed log follows:
+
+================================================================================
+--------------------------------------------------------------------------------
+Processing file 'DL_functions.py'
+ outputting to 'DL_functions_update.py'
+--------------------------------------------------------------------------------
+
+56:26: INFO: Renamed 'tf.random_normal' to 'tf.random.normal'
+57:25: INFO: Renamed 'tf.random_normal' to 'tf.random.normal'
+58:23: INFO: Changing keep_prob arg of tf.nn.dropout to rate, and recomputing value.
+
+97:8: INFO: Renamed 'tf.placeholder' to 'tf.compat.v1.placeholder'
+98:8: INFO: Renamed 'tf.placeholder' to 'tf.compat.v1.placeholder'
+99:13: INFO: Renamed 'tf.placeholder' to 'tf.compat.v1.placeholder'
+100:8: INFO: Renamed 'tf.placeholder' to 'tf.compat.v1.placeholder'
+116:31: INFO: Added keywords to args of function 'tf.reduce_sum'
+116:64: INFO: Added keywords to args of function 'tf.reduce_sum'
+119:20: INFO: Added keywords to args of function 'tf.nn.moments'
+119:54: INFO: Renamed keyword argument for tf.nn.moments from keep_dims to keepdims
+126:15: INFO: Added keywords to args of function 'tf.shape'
+132:27: INFO: Renamed 'tf.random_normal' to 'tf.random.normal'
+133:28: INFO: Renamed 'tf.random_normal' to 'tf.random.normal'
+135:17: INFO: Added keywords to args of function 'tf.reduce_mean'
+151:9: INFO: Renamed 'tf.Session' to 'tf.compat.v1.Session'
+153:17: INFO: Renamed 'tf.global_variables_initializer' to 'tf.compat.v1.global_variables_initializer'
+--------------------------------------------------------------------------------
+
