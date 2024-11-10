@@ -9,7 +9,7 @@ a = pd.read_parquet(root)
 # construct the universe
 mcap = a.marketCap
 mcap=mcap[~mcap.index.duplicated(keep='last')].unstack(level=0)
-mr = mcap.rolling(63, min_periods=10).mean().rank(axis=1)
+mr = mcap.rolling(63, min_periods=10).mean().rank(axis=1, ascending=False)
 u = mr<1000
 import datetime as dt
 u=u[u.index>'19920401']
