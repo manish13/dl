@@ -15,12 +15,12 @@ base_fundamental_data_location = {
     'bookValuePerShare': 'key-metrics-quarterly',
     'stockPrice': 'enterprise-values-quarterly',
     'netIncomePerShare': 'key-metrics-quarterly',
-    'netIncome': 'cash-flow-statement-quarterly',
+    'netIncome': 'cash-flow-statement-quarterly', ## This is not present in the data
     'totalStockholdersEquity': 'balance-sheet-statement-quarterly',
     'debtToEquity': 'key-metrics-quarterly',
-    'depreciationAndAmortization': 'cash-flow-statement-quarterly',
+    'depreciationAndAmortization': 'cash-flow-statement-quarterly', ## This is not present in the data
     'tangibleAssetValue': 'key-metrics-quarterly',
-    'operatingCashFlow': 'cash-flow-statement-quarterly',
+    'operatingCashFlow': 'cash-flow-statement-quarterly', ## This is not present in the data
     'totalDebt': 'balance-sheet-statement-quarterly',
     'operatingCashFlowPerShare': 'key-metrics-quarterly',
     'dividendYield': 'key-metrics-quarterly',
@@ -32,7 +32,9 @@ base_fundamental_data_location = {
 }
 
 def shapify(df, u):
-    return df.reindex(index=u.index, method='ffill').reindex(columns=u.columns)
+    daily = df.reindex(index=u.index, method='ffill').reindex(columns=u.columns)
+    monthly = daily.resample('M').last()
+    return monthly
 
 def get_universe():
     try:
@@ -70,7 +72,11 @@ def make_base_fundamental_data(file_name, data_name):
 
 
 for k, v in base_fundamental_data_location.items():
-    make_base_fundamental_data(v, k)
-    print(f"Finished making {k}.parquet")
-    df = pd.read_parquet(f'./data/{k}.parquet')
-    print(df.tail())
+    try:
+        make_base_fundamental_data(v, k)
+        print(f"Finished making {k}.parquet")
+        df = pd.read_parquet(f'./data/{k}.parquet')
+        print(df.tail())
+    except Exception as e:
+        print(f"Error making {k}.parquet: {e}")
+        continue
