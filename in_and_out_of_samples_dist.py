@@ -9,24 +9,35 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.stats import skew, kurtosis
-from DL_functions_v2 import data_split
+from DL_functions_update import data_split
+import os
+
+script_dir = os.path.dirname(os.path.realpath(__file__))
+
+# Construct full paths to the data files inside the 'data' folder
+data_dir = os.path.join(script_dir, "data")
+
+realZ_sample_path = os.path.join(data_dir, "realZ_sample.txt")
+realstock_return_path = os.path.join(data_dir, "realstock_return.txt")
+realportfolio_return_path = os.path.join(data_dir, "realportfolio_return.txt")
+realMKT_path = os.path.join(data_dir, "realMKT.txt")
 
 
-# Load data
-Z = np.tile(np.loadtxt("realZ_sample.txt"), (1, 30))
-R1 = np.loadtxt("realstock_return.txt")
-R2 = np.loadtxt("realportfolio_return.txt")
-M = np.loadtxt("realMKT.txt")
+# Load data : 
+Z = np.tile(np.loadtxt(realZ_sample_path), (1, 30))
+R1 = np.loadtxt(realstock_return_path)
+R2 = np.loadtxt(realportfolio_return_path)
+M = np.loadtxt(realMKT_path)
 T = M.shape[0]  # number of periods
 
 
 
+
 # Set parameters
-split_ratio = 0.8  # 80% training, 20% testing
+split_ratio = 0.5 
 
 # Split the data
-z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test = data_split(
-    Z, R1, M, R2, ratio=split_ratio, split='future'
+z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test, ff_n, port_n, t_train, n, p = data_split( Z, R1, M, R2, ratio=split_ratio, split='future'
 )
 
 # Function to compute moments
