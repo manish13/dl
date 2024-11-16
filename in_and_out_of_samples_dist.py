@@ -17,10 +17,10 @@ script_dir = os.path.dirname(os.path.realpath(__file__))
 # Construct full paths to the data files inside the 'data' folder
 data_dir = os.path.join(script_dir, "data")
 
-realZ_sample_path = os.path.join(data_dir, "realZ_sample.txt")
-realstock_return_path = os.path.join(data_dir, "realstock_return.txt")
+realZ_sample_path = os.path.join(data_dir, "char.v1.txt")
+realstock_return_path = os.path.join(data_dir, "ret.v1.txt")
 realportfolio_return_path = os.path.join(data_dir, "realportfolio_return.txt")
-realMKT_path = os.path.join(data_dir, "realMKT.txt")
+realMKT_path = os.path.join(data_dir, "ff3.v1.txt")
 
 
 # Load data : 
@@ -67,8 +67,20 @@ moments_df = pd.DataFrame({
     'Out-of-Sample': [mean_r_test, var_r_test, skew_r_test, kurt_r_test]
 })
 
-print("Statistical Moments:")
+
+
+moments_df2 = pd.DataFrame({
+    'Moment': ['Mean', 'Variance', 'Skewness', 'Kurtosis'],
+    'In-Sample': [mean_m_train, var_m_train, skew_m_train, kurt_m_train],
+    'Out-of-Sample': [mean_m_test, var_m_test, skew_m_test, kurt_m_test]
+})
+
+
+print("Statistical Moments of returns:")
 print(moments_df)
+print("Statistical Moments of characs:")
+print(moments_df2)
+
 
 # Plot distributions
 plt.figure(figsize=(14, 6))
@@ -86,6 +98,24 @@ plt.hist(r_test.flatten(), bins=50, alpha=0.7, color='orange')
 plt.title('Out-of-Sample Return Distribution')
 plt.xlabel('Return')
 plt.ylabel('Frequency')
+
+
+plt.figure(figsize=(14, 6))
+
+# Histogram of returns for in-sample data
+plt.subplot(1, 2, 1)
+plt.hist(r_train.flatten(), bins=50, alpha=0.7, color='blue')
+plt.title('In-Sample characteristics Distribution')
+plt.xlabel('char')
+plt.ylabel('Frequency')
+
+# Histogram of returns for out-of-sample data
+plt.subplot(1, 2, 2)
+plt.hist(r_test.flatten(), bins=50, alpha=0.7, color='red')
+plt.title('In-Sample characteristics Distribution')
+plt.xlabel('Return')
+plt.ylabel('Frequency')
+
 
 plt.tight_layout()
 plt.show()
