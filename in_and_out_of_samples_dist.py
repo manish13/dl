@@ -34,7 +34,7 @@ T = M.shape[0]  # number of periods
 
 
 # Set parameters
-split_ratio = 0.5 
+split_ratio = 0.5
 
 # Split the data
 z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test, ff_n, port_n, t_train, n, p = data_split( Z, R1, M, R2, ratio=split_ratio, split='future'
@@ -78,7 +78,7 @@ moments_df2 = pd.DataFrame({
 
 print("Statistical Moments of returns:")
 print(moments_df)
-print("Statistical Moments of characs:")
+print("Statistical Moments of characteristics:")
 print(moments_df2)
 
 
@@ -117,5 +117,37 @@ plt.xlabel('Return')
 plt.ylabel('Frequency')
 
 
+plt.tight_layout()
+plt.show()
+
+
+
+#Prettier graphs
+import seaborn as sns
+
+# Set the style for the plots
+plt.style.use('seaborn-deep')
+sns.set_palette('husl')  # Choose a visually appealing color palette
+
+# Create the figure with a larger size
+plt.figure(figsize=(16, 7))
+
+# Histogram of returns for in-sample data
+plt.subplot(1, 2, 1)
+sns.histplot(r_train.flatten(), bins=50, kde=True, color='steelblue', alpha=0.7)
+plt.title('In-Sample Characteristics Distribution', fontsize=14, fontweight='bold')
+plt.xlabel('Characteristic', fontsize=12)
+plt.ylabel('Frequency', fontsize=12)
+plt.grid(True, linestyle='--', linewidth=0.5)
+
+# Histogram of returns for out-of-sample data
+plt.subplot(1, 2, 2)
+sns.histplot(r_test.flatten(), bins=50, kde=True, color='coral', alpha=0.7)
+plt.title('Out-of-Sample Characteristics Distribution', fontsize=14, fontweight='bold')
+plt.xlabel('Return', fontsize=12)
+plt.ylabel('Frequency', fontsize=12)
+plt.grid(True, linestyle='--', linewidth=0.5)
+
+# Improve layout spacing
 plt.tight_layout()
 plt.show()
