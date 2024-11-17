@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras import Input, layers, losses, metrics
+from tensorflow.keras import Input, layers, losses, metrics, regularizers
 from tensorflow.keras.utils import plot_model
 
 
@@ -80,9 +80,9 @@ class CharLayer(layers.Layer):
     return self.activation(wTx)
 
 def make_deep_char_network(x, layer_size, activation, lambda2, e=0.00001):
-    lsize = [x.shape[-1]]+layer_size
+    lsize = [x.shape[-1]] + layer_size
     for i,l in enumerate(layer_size):
-        x = CharLayer(lsize[i+1], activation, lambda2, i)(x)
+        x = CharLayer(lsize[i+1], activation, lambda2, f'_C.{i}')(x)
     x = SortingLayer(e)(x)
     return x
 
@@ -103,20 +103,26 @@ class DeepFactorLayer(layers.Layer):
         f_tensor = tf.matmul(W, r_tensor)
         return tf.reshape(f_tensor, [nobs, Pd])
 
-class DeepBetaLayer(layers.Layer):
-    def __init__(self, output_size, obs_size):
-        super(DeepBetaLayer, self).__init__()
-        self._name = 'BetaL'
+class BetaLayer(layers.Layer):
+    def __init__(self, output_size, obs_size, name):
+        super(BetaLayer, self).__init__()
+        self._name = f'{name}BetaL'
         self.out_n = output_size
         self.Tn = obs_size
 
     def build(self, input_shape):
-        self.b_d = self.add_weight('b_d', shape=[self.out_n[0], self.Tn], trainable=True)
-        self.b_b = self.add_weight('b_b', shape=[self.out_n[1], self.Tn], trainable=True)
-        super(DeepBetaLayer, self).build(input_shape)
+        self.beta = self.add_weight('b_d', shape=[self.out_n, self.Tn], trainable=True)
+        super(BetaLayer, self).build(input_shape)
 
-    def call(self, input):   
-        return self.b_d, self.b_b
+    def call(self, fac):   
+        return tf.matmul(fac, self.beta)  # linear regression
+
+def make_deep_beta_network(x, fac, layer_size, activation, lambda3):
+    lsize = [x.shape[-1]] + layer_size
+    for i, l in enumerate(layer_size):
+        x = layers.Dense(lsize[i+1], activation=activation, kernel_regularizer=regularizers.l2(lambda3), name=f'B.{i}')(x)
+    b_d = tf.transpose(x, perm=[0, 2, 1])
+    return tf.matmul(fac, b_d)
 
 class DeepFactorReturnsLayer(layers.Layer):
     def __init__(self, lambda1):
@@ -128,29 +134,35 @@ class DeepFactorReturnsLayer(layers.Layer):
         super(DeepFactorReturnsLayer, self).build(input_shape)
 
     def call(self, inputs): 
-       f, m, b_d, b_b, r = inputs
-       r_hat = tf.matmul(f, b_d) + tf.matmul(m, b_b)
+       f_d, f_b, r = inputs
+       r_hat = f_d + f_b
        alpha  = tf.reduce_mean(r - r_hat,axis=0) 
        self.add_loss(tf.reduce_mean(tf.square(alpha))*self.lambda1)
        return r_hat
    
-def get_model(activation, inputShapes, layer_size, n, lambda1, lambda2):
+def get_model(activation, inputShapes, char_layer_size, beta_layer_size, n, lambda_list):
+    lambda1, lambda2, lambda3 = lambda_list
     Z = Input(shape=inputShapes[0], name='raw_chars')
     r = Input(shape=inputShapes[1], name='asset_ret')
     m = Input(shape=inputShapes[2], name='bfac_ret')
 
-    W = make_deep_char_network(Z, layer_size, activation, lambda2)
+    W = make_deep_char_network(Z, char_layer_size, activation, lambda2)
     f = DeepFactorLayer(n)([W, r])
-    b_d, b_b= DeepBetaLayer([layer_size[-1], inputShapes[2][0]], Z.shape[1])(W)
 
-    r_hat = DeepFactorReturnsLayer(lambda1)([f, m, b_d, b_b, r])
+    f_d = make_deep_beta_network(Z, f, beta_layer_size, activation, lambda3)
+    # f_d = BetaLayer(beta_layer_size[-1], Z.shape[1], 'deep')(f)
+    f_b = BetaLayer(inputShapes[2][0], Z.shape[1], 'benchmark')(m)
+    
+    r_hat = DeepFactorReturnsLayer(lambda1)([f_d, f_b, r])
     
     model = Model(inputs=[Z, r, m], outputs=r_hat, name='deep_factor_model')
     
     return model
     
-def main(data, layer_size, param):
+def main(data, char_layer_size, beta_layer_size, param):
     print(tf.__version__)
+    assert char_layer_size[-1] == beta_layer_size[-1]
+    
     z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test, n = \
         data_split(data['characteristics'], 
                    data['stock_return'], 
@@ -160,7 +172,7 @@ def main(data, layer_size, param):
                    param['split'])
     
     inputShapes = [z_train.shape[1:], r_train.shape[1:], m_train.shape[1:]]
-    model = get_model(param['activation'], inputShapes, layer_size, n, param['Lambda1'], param['Lambda2'])
+    model = get_model(param['activation'], inputShapes, char_layer_size, beta_layer_size, n, [param['Lambda1'], param['Lambda2'], param['Lambda3']])
 
     model.compile(
         loss = losses.MeanSquaredError(),
@@ -187,9 +199,9 @@ if __name__ == '__main__':
     # load data
     ROOT = '/home/manish/code/dl/data/'
 
-    Z = np.loadtxt(f"{ROOT}char.v1.txt").astype(np.float32)
-    R1 = np.loadtxt(f"{ROOT}ret.v1.txt").astype(np.float32)
-    R2 = np.loadtxt(f"{ROOT}ret.v1.txt").astype(np.float32)
+    Z = np.loadtxt(f"{ROOT}char.v2.txt").astype(np.float32)
+    R1 = np.loadtxt(f"{ROOT}ret.v2.txt").astype(np.float32)
+    R2 = np.loadtxt(f"{ROOT}ret.v2.txt").astype(np.float32)
     M = np.loadtxt(f"{ROOT}ff3.v1.txt").astype(np.float32)
     T = M.shape[0] # number of periods
     print(Z.shape, R1.shape, M.shape, T)
@@ -198,17 +210,19 @@ if __name__ == '__main__':
 
     # set parameters
     training_para = dict(epoch=200, train_ratio=0.7, train_algo=tf.compat.v1.train.AdamOptimizer,
-                        split="future", activation=tf.nn.tanh, start=1, batch_size=120, learning_rate=0.1,
-                        Lambda1=0, Lambda2=0.1)
+                        split="future", activation=tf.nn.tanh, start=1, batch_size=120, learning_rate=0.0005,
+                        Lambda1=0, Lambda2=0.1, Lambda3=0.1)
 
     # design network layers
-    layer_size = [32, 16, 8, 4]
+    char_layer_size = [32, 16, 8, 4]
+    beta_layer_size = [16, 8, 4]  # default [4]
+
 
     # construct deep factors
-    model, history, test_scores = main(data_input, layer_size, training_para)
+    model, history, test_scores = main(data_input, char_layer_size, beta_layer_size, training_para)
 
     import pickle
-    pickle.dump({'param':training_para, 'layers': layer_size}, open('data/parameters.pickle', 'wb'))
+    pickle.dump({'param':training_para, 'char_layers': char_layer_size, 'beta_layers': beta_layer_size}, open('data/parameters.pickle', 'wb'))
     # pickle.dump(f, open('data/factors.pickle', 'wb'))
     # pickle.dump(char, open('data/characteristics.pickle', 'wb'))
     pickle.dump([history.history['loss'], history.history['val_loss'], history.history['mean_squared_error'], history.history['val_mean_squared_error']], open('data/loss.pickle', 'wb'))
