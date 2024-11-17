@@ -123,14 +123,14 @@ def dl_alpha(data, layer_size, para):
                 layers_1[i], layer_size[i], layer_size[i + 1], para['activation'])
             layers_1.append(new_layer)
             if i < L -1:
-                weights_l1 += (tf.reduce_sum(tf.abs(weights)) - tf.reduce_sum(tf.abs(tf.linalg.diag_part(weights))))
+                weights_l1 += (tf.reduce_sum(tf.abs(weights))) #- tf.reduce_sum(tf.abs(tf.linalg.diag_part(weights))))
 
         # softmax for factorweight
         mean, var = tf.nn.moments(layers_1[-1],axes=1,keepdims=True)
         normalized_char = (layers_1[-1] - mean)/(tf.sqrt(var)+0.00001)
         transformed_char_a = -50*tf.exp(-5*normalized_char)
         transformed_char_b = -50*tf.exp(5*normalized_char)
-        w_tilde = tf.transpose(a=tf.nn.softmax(transformed_char_a, axis=1), perm=[0,2,1])# - tf.nn.softmax(transformed_char_b, axis=1), perm=[0,2,1])
+        w_tilde = tf.transpose(a=tf.nn.softmax(transformed_char_a, axis=1) - tf.nn.softmax(transformed_char_b, axis=1), perm=[0,2,1])
 
         # construct factors
         nobs = tf.shape(r)[0]
@@ -214,3 +214,31 @@ def dl_alpha(data, layer_size, para):
     nt, nnn, pp = deep_char.shape
     deep_char = deep_char.reshape(nt, nnn*pp) # todo check if this is right way to reshape
     return factor, deep_char, loss_train, loss_val, loss_test
+
+
+if __name__ == '__main__':
+    from DL_functions_v2 import *
+    import numpy as np
+    import tensorflow as tf
+
+    # load data
+    ROOT = '/home/manish/code/dl/data/'
+
+
+    Z = np.loadtxt(f"{ROOT}char.v1.txt")
+    R1 = np.loadtxt(f"{ROOT}ret.v1.txt")
+    R2 = np.loadtxt(f"{ROOT}ret.v1.txt")
+    M = np.loadtxt(f"{ROOT}ff3.v1.txt")
+    T = M.shape[0] # number of periods
+    print(Z.shape, R1.shape, M.shape, T)
+    data_input = dict(characteristics=Z, stock_return=R1, target_return=R2, factor=M[:, 0:3])
+
+    # set parameters
+    training_para = dict(epoch=100, train_ratio=0.7, train_algo=tf.compat.v1.train.AdamOptimizer,
+                        split="future", activation=tf.nn.tanh, start=1, batch_size=120, learning_rate=0.1,
+                        Lambda1=0, Lambda2=0.1)
+    # design network layers
+    layer_size = [32, 16, 8, 4]
+
+    # construct deep factors
+    f, char, ltrain, lval, ltest = dl_alpha(data_input, layer_size, training_para)
