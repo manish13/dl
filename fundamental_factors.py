@@ -70,13 +70,14 @@ def make_base_fundamental_data(file_name, data_name):
         all_stock_df = all_stock_df.astype(np.float64)
     all_stock_df.to_parquet(f'./data/{data_name}.parquet')
 
+if __name__ == '__main__':
 
-for k, v in base_fundamental_data_location.items():
-    try:
-        make_base_fundamental_data(v, k)
-        print(f"Finished making {k}.parquet")
-        df = pd.read_parquet(f'./data/{k}.parquet')
-        print(df.tail())
-    except Exception as e:
-        print(f"Error making {k}.parquet: {e}")
-        continue
+    for k, v in base_fundamental_data_location.items():
+        try:
+            make_base_fundamental_data(v, k)
+            print(f"Finished making {k}.parquet")
+            df = pd.read_parquet(f'./data/{k}.parquet')
+            print(df.tail())
+        except Exception as e:
+            print(f"Error making {k}.parquet: {e}")
+            continue

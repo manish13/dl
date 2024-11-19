@@ -1,4 +1,4 @@
-aimport pandas as pd, numpy as np
+import pandas as pd, numpy as np
 import technical_factors as techfac 
 
 
