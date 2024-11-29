@@ -87,8 +87,9 @@ def make_base_fundamental_data(file_name, data_name):
         all_stock_df = all_stock_df.apply(pd.to_numeric, errors='coerce')
         # all_stock_df = all_stock_df.div(1e6)
         all_stock_df = all_stock_df.astype(np.float64)
+    os.makedirs('./data/raw_factors', exist_ok=True)    
     all_stock_df.to_parquet(f'./data/raw_factors/{data_name}.parquet')
-
+    
 if __name__ == '__main__':
 
     for k, v in base_fundamental_data_location.items():
@@ -102,7 +103,8 @@ if __name__ == '__main__':
             continue
             
     u = get_universe()
-    u = u.drop(['CYOU','FENG','MAGS'], axis = 1)    
+    u = u.drop(['CYOU','FENG','MAGS'], axis = 1)
+    os.makedirs('./data/derived_factors', exist_ok=True)    
     for factor in derived_growth_factors :
         try :
             if factor == "EP":

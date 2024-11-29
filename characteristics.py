@@ -68,7 +68,7 @@ Fundamental ={
 'CHTX': ''
 }
 
-ROOT = '/home/manish/code/dl/data/'
+ROOT = './data/'
 
 def make_universe():
     u = techfac.get_universe(techfac.get_price_data())
@@ -79,7 +79,7 @@ def make_returns():
     r = techfac.get_data(a.close).pct_change()
     r[r.abs()>0.2] = np.nan  # this is adhoc cleaning but should suffice for training
     u = CharacterisitcMaker().universe()
-    r.reindex(columns=u.columns).to_parquet(f'{ROOT}eturns.parquet')
+    r.reindex(columns=u.columns).to_parquet(f'{ROOT}returns.parquet')
 
 def make_price():
     a = techfac.get_price_data()
@@ -106,27 +106,28 @@ def make_ff3():
 
 
 input_map = {
-    'MOM_1M': ['returns'],
-    'ZEROTRADE': ['volume'],
-    'ME': ['mktcap'],
-    'STD_DOL_VOL': ['volume', 'price'],
-    'SEAS1A': ['returns'],
-    'BETA': ['returns', 'market'],
-    'CHCSHO': ['mktcap', 'price'],
-    'RVAR_MEAN': ['returns'],
-    'MOM6M': ['returns'],
-    'DOLVOL': ['volume', 'price'],
-    'MOM60M': ['returns'],
-    'MOM36M': ['returns'],
-    'TURN': ['volume', 'mktcap', 'price'],
-    'STD_TURN': ['volume', 'mktcap', 'price'],
-    'MOM12M': ['returns'],
-    'RVAR_CAPM': ['returns', 'market'],
+    # 'MOM_1M': ['returns'],
+    # 'ZEROTRADE': ['volume'],
+    # 'ME': ['mktcap'],
+    # 'STD_DOL_VOL': ['volume', 'price'],
+    # 'SEAS1A': ['returns'],
+    # 'BETA': ['returns', 'market'],
+    # 'CHCSHO': ['mktcap', 'price'],
+    # 'RVAR_MEAN': ['returns'],
+    # 'MOM6M': ['returns'],
+    # 'DOLVOL': ['volume', 'price'],
+    # 'MOM60M': ['returns'],
+    # 'MOM36M': ['returns'],
+    # 'TURN': ['volume', 'mktcap', 'price'],
+    # 'STD_TURN': ['volume', 'mktcap', 'price'],
+    # 'MOM12M': ['returns'],
+    # 'RVAR_CAPM': ['returns', 'market'],
     'RVAR_FF3': ['returns', 'ff3'],
 }
 class CharacterisitcMaker:
     def __init__(self, name: str = None):
-        assert name in input_map
+        if (not name is None) and (name not in input_map):
+            raise ValueError(f"Invalid characteristic name: {name}. Must be one of {list(input_map.keys())}")
         self.name = name # name of the characteristic
 
     def universe(self):
@@ -168,12 +169,10 @@ class CharacterisitcMaker:
 if __name__ == '__main__':
     # make_universe()
     # make_ff3()
+    # make_returns()
     for i in input_map:
         print('generating', i)
         try:
             df = CharacterisitcMaker(name=i)(True)
-        except:
-            print(i)
-    
-    
-
+        except Exception as e:
+            print('ERROR - ', e)

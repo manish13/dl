@@ -4,12 +4,12 @@ import numpy as np
 
 # data read utils
 def get_price_data():
-    root = '/home/manish/USData/data/us_stocks.parquet'
+    root = './data/us_stocks.parquet'
     a = pd.read_parquet(root)
     return a
 
 def get_ff3():
-    root = '/home/manish/USData/FF3.csv'
+    root = './data/FF3.csv'
     a = pd.read_csv(root, index_col=0, parse_dates=True)    
     return a
 
@@ -67,16 +67,16 @@ def RVAR_MEAN(ret):
     return ret.rolling(21*3, min_periods=5).var()
 
 def MOM6M(ret):
-    return ret.rolling(21*5, min_periods=5).mean().shift(21)
+    return ret.shift(21).rolling(21*5, min_periods=5).apply(lambda x: x.ffill().mean(), raw=False)
 
 def DOLVOL(vol, prc):
     return vol*prc 
 
 def MOM60M(ret):
-    return - ret.rolling(21*60, min_periods=21*12).shift(12*21)
+    return ret.shift(12*21).rolling(21*60, min_periods=21*12).apply(lambda x: x.ffill().mean(), raw=False)
 
 def MOM36M(ret):
-    return ret.rolling(21*36, min_periods=21*12).shift(12*21)
+    return ret.shift(12*21).rolling(21*36, min_periods=21*12).apply(lambda x: x.ffill().mean(), raw=False)
 
 def TURN(vol, mcap, prc):
     return vol/mcap * prc
@@ -85,7 +85,7 @@ def STD_TURN(vol, mcap, prc):
     return (vol/mcap*prc).rolling(21*3, min_periods=5).std()
 
 def MOM12M(ret):
-    return ret.rolling(21*12, min_periods=21).shift(21)
+    return ret.shift(21*12).rolling(21*12, min_periods=21*12).apply(lambda x: x.ffill().mean(), raw=False)
 
 def RVAR_CAPM(ret, mkt):
     beta = BETA(ret, mkt)
@@ -94,6 +94,7 @@ def RVAR_CAPM(ret, mkt):
 
 def RVAR_FF3(ret, ff3):
     beta = pd.DataFrame({BETA(ret, ff3[i]) for i in ff3.columns})
+    print(f'RVAR beta shape = {beta.shape}')
     e = ret - beta * ff3 
     return e.rolling(12*21, min_periods=21).std()
 
