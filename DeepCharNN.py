@@ -60,8 +60,10 @@ class CharLayer(layers.Layer):
     super(CharLayer, self).build(input_shape)
 
   def call(self, input):
-    #dol = layers.Dropout(self.keep)(input)
-    dol = self.dropout(input)  # Use the Dropout layer created in __init__
+    dol = layers.Dropout(self.keep)(input)
+    # mean, var = tf.nn.moments(input, axes=1, keepdims=True)
+    # zx = (input-mean)/(tf.sqrt(var)+0.00001)
+    # dol = self.dropout(zx)  # Use the Dropout layer created in __init__
     wTx = tf.tensordot(dol, self.w, axes=[[2],[0]]) + self.b  # 2 is charcteristic and 0 is time axis
     # the below is L1 regularization.
     # to make it L2, uncomment the below line
@@ -71,7 +73,7 @@ class CharLayer(layers.Layer):
 
 class SortingLayer(layers.Layer):
   # this layer replicates "human" sorting of characteristics to create factors
-  def __init__(self, e):
+  def __init__(self, e=0.00001):
     super(SortingLayer, self).__init__()
     self._name = 'SortL'
     self.e = e
@@ -150,10 +152,15 @@ def make_deep_beta_network(x, fac, layer_size, activation, lambda3, suffix):
 
 def make_deep_char_network(x, layer_size, activation, lambda2, e=0.00001):
     lsize = [x.shape[-1]] + layer_size # [50] + [32, 16, 8, 2], where 50 is the number of characteristics (input dimension)
-    for i,l in enumerate(layer_size):
-        # num_outputs, activation, lambda2, idx
+    grads = []
+    # with tf.GradientTape() as tape:
+    #     for i in range(len(layer_size)):
+    #         x = CharLayer(lsize[i+1], activation, lambda2, f'_C.{i}')(x)
+    #     y = SortingLayer(e)(x)
+    #     grads = tape.gradient(y, x)
+    for i in range(len(layer_size)):
         x = CharLayer(lsize[i+1], activation, lambda2, f'_C.{i}')(x)
-    x = SortingLayer(e)(x)
+    #y = SortingLayer(e)(x)
     return x
 
 def get_model(activation, inputShapes, char_layer_size, beta_layer_size, bfac_layer_size, n, lambda_list):
@@ -163,7 +170,9 @@ def get_model(activation, inputShapes, char_layer_size, beta_layer_size, bfac_la
     m = Input(shape=inputShapes[2], name='bfac_ret')
     u = Input(shape=inputShapes[1], name='mask')
 
-    W = make_deep_char_network(Z, char_layer_size, activation, lambda2)
+    Y = make_deep_char_network(Z, char_layer_size, activation, lambda2)
+    Y = tf.reshape(Y, [-1, Z.shape[1], char_layer_size[-1]])  # Explicitly specify the shape before passing to the next layer
+    W = SortingLayer()(Y)
     f = DeepFactorLayer(n)([W, r])
 
     B_dxf_d = make_deep_beta_network(Z, f, beta_layer_size, activation, lambda3, 'D')
