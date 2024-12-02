@@ -3,6 +3,7 @@ import tensorflow as tf
 from tensorflow.keras import Model
 from tensorflow.keras import Input, layers, losses, metrics, regularizers, optimizers
 from tensorflow.keras.utils import plot_model
+from tensorflow.keras.callbacks import Callback
 tf.random.set_seed(420)
 
 def data_split(z_data, r_data, m_data, target_data, ratio, split):
@@ -42,6 +43,40 @@ def data_split(z_data, r_data, m_data, target_data, ratio, split):
     m_test = m_data[test_idx]
 
     return z_train, r_train, m_train, target_train, z_test, r_test, m_test, target_test, n
+
+def get_gradient_callback(model, layer_name, x_train):
+    class GradientCallback(tf.keras.callbacks.Callback):
+        def __init__(self):
+            super(GradientCallback, self).__init__()
+            self.x_train = x_train
+            self.model = model
+            self.y = []
+            self.gradients = []
+
+        def on_epoch_end(self, epoch, logs=None):
+            x = [tf.convert_to_tensor(inp) for inp in self.x_train]
+            with tf.GradientTape(persistent=True) as tape:
+                for inp in x:
+                    tape.watch(inp)
+                intermediate_model = tf.keras.Model(inputs=self.model.input, outputs=self.model.get_layer(layer_name).output)
+                y = intermediate_model(x, training=True)
+            # print(f"y_shape: {y.shape} AND y: {y.numpy()}")
+            # ideally we should be computing Jacobian, but my system is running out of memory
+            # grads = tape.batch_jacobian(y, x[0])
+            # gradient produces a dimension that is the same as source tensor
+            # let's say target = [y1, y2] and sources = [x1, x2]. The result will be:
+            # [dy1/dx1 + dy2/dx1, dy1/dx2 + dy2/dx2]
+            # reference https://stackoverflow.com/a/60744419
+            grads = tape.gradient(y, x[0])
+            print(f"Epoch {epoch+1}: Recorded gradients")
+            # print(f"Gradients shape: {grads.shape}")
+            # print(f"Gradients: {grads.numpy()}")
+            self.y.append(y.numpy())
+            self.gradients.append(grads.numpy())
+
+            del tape
+
+    return GradientCallback()
 
 class CharLayer(layers.Layer):
   def __init__(self, num_outputs, activation, lambda2, idx, keep=0.5):
@@ -111,20 +146,6 @@ class DeepFactorLayer(layers.Layer):
         f_tensor = tf.matmul(W, r_tensor) # (None, 2, 2941) x (None, 2941, 1) = (None, 2, 1)
         return tf.reshape(f_tensor, [nobs, Pd])
 
-class BetaLayer(layers.Layer):
-    def __init__(self, output_size, obs_size, name):
-        super(BetaLayer, self).__init__()
-        self._name = f'{name}BetaL'
-        self.out_n = output_size
-        self.Tn = obs_size
-
-    def build(self, input_shape):
-        self.beta = self.add_weight('b_d', shape=[self.out_n, self.Tn], trainable=True)
-        super(BetaLayer, self).build(input_shape)
-
-    def call(self, fac): # fac is return of benchmark factors.  
-        return tf.matmul(fac, self.beta)  # linear regression
-
 class DeepFactorReturnsLayer(layers.Layer):
     def __init__(self, lambda1):
         super(DeepFactorReturnsLayer, self).__init__()
@@ -143,8 +164,6 @@ class DeepFactorReturnsLayer(layers.Layer):
 
 def make_deep_beta_network(x, fac, layer_size, activation, lambda3, suffix):
     lsize = [x.shape[-1]] + layer_size
-    # a, b, c = x.shape
-    # x = tf.reshape(x, (tf.shape(x)[0], b*c))
     for i, l in enumerate(layer_size):
         x = layers.Dense(lsize[i+1], activation=activation, kernel_regularizer=regularizers.l2(lambda3), name=f'{suffix}.{i}')(x)
     b_d = tf.transpose(x, perm=[0, 2, 1])
@@ -152,15 +171,8 @@ def make_deep_beta_network(x, fac, layer_size, activation, lambda3, suffix):
 
 def make_deep_char_network(x, layer_size, activation, lambda2, e=0.00001):
     lsize = [x.shape[-1]] + layer_size # [50] + [32, 16, 8, 2], where 50 is the number of characteristics (input dimension)
-    grads = []
-    # with tf.GradientTape() as tape:
-    #     for i in range(len(layer_size)):
-    #         x = CharLayer(lsize[i+1], activation, lambda2, f'_C.{i}')(x)
-    #     y = SortingLayer(e)(x)
-    #     grads = tape.gradient(y, x)
     for i in range(len(layer_size)):
         x = CharLayer(lsize[i+1], activation, lambda2, f'_C.{i}')(x)
-    #y = SortingLayer(e)(x)
     return x
 
 def get_model(activation, inputShapes, char_layer_size, beta_layer_size, bfac_layer_size, n, lambda_list):
@@ -168,22 +180,19 @@ def get_model(activation, inputShapes, char_layer_size, beta_layer_size, bfac_la
     Z = Input(shape=inputShapes[0], name='raw_chars')
     r = Input(shape=inputShapes[1], name='asset_ret')
     m = Input(shape=inputShapes[2], name='bfac_ret')
-    u = Input(shape=inputShapes[1], name='mask')
+    # u = Input(shape=inputShapes[1], name='mask')
 
     Y = make_deep_char_network(Z, char_layer_size, activation, lambda2)
     Y = tf.reshape(Y, [-1, Z.shape[1], char_layer_size[-1]])  # Explicitly specify the shape before passing to the next layer
     W = SortingLayer()(Y)
-    f = DeepFactorLayer(n)([W, r])
-
-    B_dxf_d = make_deep_beta_network(Z, f, beta_layer_size, activation, lambda3, 'D')
     
+    f = DeepFactorLayer(n)([W, r])
+    B_dxf_d = make_deep_beta_network(Z, f, beta_layer_size, activation, lambda3, 'D')
     # B_bxf_b = BetaLayer(inputShapes[2][0], Z.shape[1], 'benchmark')(m)
     B_bxf_b = make_deep_beta_network(Z, m, bfac_layer_size, activation, lambda3, 'B')
-    
     r_hat = DeepFactorReturnsLayer(lambda1)([B_dxf_d, B_bxf_b, r])
     
     model = Model(inputs=[Z, r, m], outputs=r_hat, name='deep_factor_model')
-    
     return model
     
 def main(data, param):
@@ -218,63 +227,42 @@ def main(data, param):
     print(model.summary())
     # plot_model(model, 'data/deep_factor_model.png', show_shapes=True)
 
+    # gradient_logger = GradientLogger(model, [z_train, r_train, m_train], target_train, char_layer_size, param['activation'], param['Lambda2'])
+    gradient_logger = get_gradient_callback(model, 'CharL_C.3', [z_train, r_train, m_train])
+
     history = model.fit([z_train, r_train, m_train], 
                         [target_train],
                         batch_size=param['batch_size'], 
                         epochs=param['epoch'],
-                        # callbacks=[callbacks.EarlyStopping(patience=2)], 
-                        validation_split=0.3)
+                        # callbacks=[callbacks.EarlyStopping(patience=2)],
+                        callbacks=[gradient_logger], 
+                        validation_split=0.2)
     
-    
+    intermediate_y = gradient_logger.y # dimension of intermediate_y is (epoch, 238, 2941, 2)
+    dydz = gradient_logger.gradients # dimension of intermediate_gradients is (epoch, 238, 2941, 50)
+
     test_scores = model.evaluate([z_test, r_test, m_test], [target_test], verbose=2)
     
-    return model, history, test_scores
+    return model, history, test_scores, intermediate_y, dydz
     
 if __name__ == '__main__':
-    import numpy as np, pandas as pd
 
     # load data
     ROOT = './data/'
 
-    # Z = np.loadtxt(f"{ROOT}char.v2.txt").astype(np.float32)
-    # Z = np.concatenate([Z, (Z!=0).astype(float)], axis=1)
-    # # Z =  np.random.randn(*Z.shape)
-    # R1 = np.loadtxt(f"{ROOT}ret.v2.txt").astype(np.float32)
-    # # R1 = np.random.randn(*R1.shape)
-    # R2 = np.loadtxt(f"{ROOT}ret.v2.txt").astype(np.float32)
-    # # R2 = np.random.randn(*R2.shape)
-    # M = np.loadtxt(f"{ROOT}ff3.v1.txt").astype(np.float32)
-    # # M = np.random.randn(*M.shape)
-    # T = M.shape[0] # number of periods
-    # print(Z.shape, R1.shape, M.shape, T)
-
-    # data_input = dict(characteristics=Z, stock_return=R1, target_return=R2, factor=M[:, 0:3])
-
-    # # set parameters
-    # training_para = dict(epoch=100, train_ratio=0.7, train_algo=tf.compat.v1.train.AdamOptimizer,
-    #                     split="future", activation=tf.nn.tanh, start=1, batch_size=120, 
-    #                     learning_rate=.01, Lambda1=0.000, Lambda2=0.0001, Lambda3=0)
-
-    # # design network layers
-    # char_layer_size = [1]#[32, 16, 8, 2]
-    # beta_layer_size = [1]#[64, 16, 2]  # default [4]
-
-    # training_para = dict(epoch=100, train_ratio=0.7, train_algo=optimizers.AdamOptimizer,
-    #                     split="future", activation=tf.nn.tanh, start=1, batch_size=50, 
-    #                     learning_rate=.01, Lambda1=0.000, Lambda2=0.0001, Lambda3=0)
-    # char_layer_size = [32, 16, 8, 2]
-    # beta_layer_size = [8, 4, 2]
-
     Z = np.loadtxt(f"{ROOT}standardized_factors_MERGED.txt").astype(np.float32)
-    
     Z = Z[:-1, :] #lag the characteristics by 1 period
+    
     R1 = np.loadtxt(f"{ROOT}ret.v2.txt").astype(np.float32)[1:] #done to ensure same dimension as Z
-    R1 = np.clip(R1, -0.2, .2)
+    R1 = np.clip(R1, -0.5, .5)
     R2 = R1
+    
     M = np.loadtxt(f"{ROOT}ff3.v1.txt").astype(np.float32)[1:] #done to ensure same dimension as Z
+    
     U = pd.read_parquet(f'{ROOT}universe_monthly.parquet').values[1:] #done to ensure same dimension as Z
-    # T = M.shape[0] # number of periods
+    
     T, F = M.shape # number of periods
+    
     print(Z.shape, R1.shape, M.shape, U.shape, T)
 
     data_input = dict(characteristics=Z, stock_return=R1, target_return=R2, factor=M[:, 0:3], mask=U)
@@ -283,18 +271,24 @@ if __name__ == '__main__':
     beta_layer_size = [8, 4, 2]
     bfac_layer_size = [8, 4, F]
 
-    training_para = dict(epoch=30, train_ratio=0.7, train_algo=optimizers.Adam,
+    training_para = dict(epoch=50, train_ratio=0.7, train_algo=optimizers.Adam,
                         split="future", activation=tf.nn.tanh, start=1, batch_size=75,
                         layers=[char_layer_size, beta_layer_size, bfac_layer_size], 
-                        learning_rate=1e-3, Lambda1=1e-4, Lambda2=1e-5, Lambda3=1e-6) # l1: alpha, l2: char loading, l3: beta
+                        learning_rate=0.01, Lambda1=1e-5, Lambda2=1e-6, Lambda3=1e-7) # l1: alpha, l2: char loading, l3: beta
 
     # construct deep factors
-    model, history, test_scores = main(data_input, training_para)
+    model, history, test_scores, intermediate_y, dydz = main(data_input, training_para)
 
-    pickle.dump({'param':training_para}, open(f'{ROOT}/parameters.pickle', 'wb'))
     # pickle.dump(f, open('data/factors.pickle', 'wb'))
     # pickle.dump(char, open('data/characteristics.pickle', 'wb'))
     print('test_scores',test_scores)
     print(history)
     # pickle.dump(history, open(f'{ROOT}/history.pickle', 'wb'))
-    pickle.dump([history.history['loss'], history.history['val_loss'], history.history['mean_squared_error'], history.history['val_mean_squared_error']], open(f'{ROOT}/loss.pickle', 'wb'))
+    with open(f'{ROOT}/parameters.pickle', 'wb') as f:
+        pickle.dump({'param':training_para}, f)
+    with open(f'{ROOT}/intermediate_y.pickle', 'wb') as f:
+        pickle.dump({'intermediate_y':intermediate_y}, f)
+    with open(f'{ROOT}/dydz.pickle', 'wb') as f:
+        pickle.dump({'dydz':dydz}, f)
+    with open(f'{ROOT}/loss.pickle', 'wb') as f:    
+        pickle.dump([history.history['loss'], history.history['val_loss'], history.history['mean_squared_error'], history.history['val_mean_squared_error']], f)
