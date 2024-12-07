@@ -79,7 +79,7 @@ def get_gradient_callback(model, layer_name, x_train):
     return GradientCallback()
 
 class CharLayer(layers.Layer):
-  def __init__(self, num_outputs, activation, lambda2, idx, keep=0.5):
+  def __init__(self, num_outputs, activation, lambda2, idx, keep=0.0):
     super(CharLayer, self).__init__()
     self._name = f'CharL{idx}'
     self.num_outputs = num_outputs
@@ -271,10 +271,10 @@ if __name__ == '__main__':
     beta_layer_size = [8, 4, 2]
     bfac_layer_size = [8, 4, F]
 
-    training_para = dict(epoch=50, train_ratio=0.7, train_algo=optimizers.Adam,
+    training_para = dict(epoch=80, train_ratio=0.7, train_algo=optimizers.Adam,
                         split="future", activation=tf.nn.tanh, start=1, batch_size=75,
                         layers=[char_layer_size, beta_layer_size, bfac_layer_size], 
-                        learning_rate=0.01, Lambda1=1e-5, Lambda2=1e-6, Lambda3=1e-7) # l1: alpha, l2: char loading, l3: beta
+                        learning_rate=0.0025, Lambda1=1e-5, Lambda2=1e-6, Lambda3=1e-7) # l1: alpha, l2: char loading, l3: beta
 
     # construct deep factors
     model, history, test_scores, intermediate_y, dydz = main(data_input, training_para)
@@ -284,11 +284,11 @@ if __name__ == '__main__':
     print('test_scores',test_scores)
     print(history)
     # pickle.dump(history, open(f'{ROOT}/history.pickle', 'wb'))
-    with open(f'{ROOT}/parameters.pickle', 'wb') as f:
+    with open(f'{ROOT}/deriv/parameters.pickle', 'wb') as f:
         pickle.dump({'param':training_para}, f)
-    with open(f'{ROOT}/intermediate_y.pickle', 'wb') as f:
-        pickle.dump({'intermediate_y':intermediate_y}, f)
-    with open(f'{ROOT}/dydz.pickle', 'wb') as f:
+    # with open(f'{ROOT}/deriv/intermediate_y.pickle', 'wb') as f:
+    #     pickle.dump({'intermediate_y':intermediate_y}, f)
+    with open(f'{ROOT}/deriv/dydz.pickle', 'wb') as f:
         pickle.dump({'dydz':dydz}, f)
-    with open(f'{ROOT}/loss.pickle', 'wb') as f:    
+    with open(f'{ROOT}/deriv/loss.pickle', 'wb') as f:    
         pickle.dump([history.history['loss'], history.history['val_loss'], history.history['mean_squared_error'], history.history['val_mean_squared_error']], f)
