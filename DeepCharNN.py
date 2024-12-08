@@ -163,6 +163,9 @@ class DeepFactorReturnsLayer(layers.Layer):
        return r_hat
 
 def make_deep_beta_network(x, fac, layer_size, activation, lambda3, suffix):
+    # fac is the factor return.
+    # it could be deep factor return or benchmark factor return
+    # currently it is a fully connected layer. TODO: make it sparsely connected like the CharLayer
     lsize = [x.shape[-1]] + layer_size
     for i, l in enumerate(layer_size):
         x = layers.Dense(lsize[i+1], activation=activation, kernel_regularizer=regularizers.l2(lambda3), name=f'{suffix}.{i}')(x)
